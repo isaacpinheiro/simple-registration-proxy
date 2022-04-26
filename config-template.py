@@ -4,6 +4,10 @@
 config = {}
 
 # Proxy Configuration
+config['db_host'] = 'localhost'
+config['db_user'] = ''
+config['db_pass'] = ''
+config['db_name'] = 'simple_registration_proxy'
 config['proxy_host'] = '0.0.0.0'
 config['proxy_port'] = 5000
 
