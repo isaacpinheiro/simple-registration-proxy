@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import paho.mqtt.client as mqtt
-import http.client
+import requests as req
 import ssl
 import json
 import re
@@ -10,38 +10,19 @@ import re
 from config import config
 from src.model.device import Device
 
-def get_http_connection(url, https, verification):
-
-    http_conn = None
-
-    if https == True and verification == False:
-
-        http_conn = http.client.HTTPSConnection(url, context = ssl._create_unverified_context())
-
-    elif https == True and verification == True:
-
-        http_conn = http.client.HTTPSConnection(url)
-
-    else:
-
-        http_conn = http.client.HTTPConnection(url)
-
-    return http_conn
-
 def verify_access_token(token):
 
     authorized = False
-    idm_url = '/user?access_token=' + token
+    idm_url = config['idm_host'] + ':' + str(config['idm_port']) + '/user?access_token=' + token
 
-    http_conn = get_http_connection(
-        config['idm_host'] + ':' + str(config['idm_port']),
-        config['idm_https'],
-        config['idm_ssl_verification']
-    )
+    if config['idm_https'] == True:
+        idm_url = 'https://' + idm_url
+    else:
+        idm_url = 'http://' + idm_url
 
-    http_conn.request('GET', idm_url)
-    obj = json.loads(http_conn.getresponse().read().decode())
-    http_conn.close()
+    res = req.request('GET', idm_url, verify=config['idm_ssl_verification'])
+    obj = json.loads(res.text)
+    res.close()
 
     if obj.get('app_id') != None:
         authorized = True
@@ -49,7 +30,44 @@ def verify_access_token(token):
     return authorized
 
 def register_device(payload):
-    pass
+
+    cs_url = config['cs_host'] + ':' + str(config['cs_port']) + '/api/devices'
+
+    if config['cs_https'] == True:
+        cs_url = 'https://' + cs_url
+    else:
+        cs_url = 'http://' + cs_url
+
+    header = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Grpc-Metadata-Authorization': 'Bearer ' + config['cs_api_key']
+    }
+
+    payload_body = {
+        'device': {
+            'applicationID': payload['applicationID'],
+            'description': 'Device ' + payload['devEUI'],
+            'devEUI': payload['devEUI'],
+            'deviceProfileID': payload['deviceProfileID'],
+            'isDisabled': True,
+            'name': 'Device ' + payload['devEUI'],
+            'referenceAltitude': 0,
+            'skipFCntCheck': True,
+            'tags': {},
+            'variables': {}
+        }
+    }
+
+    res = req.request(
+        'POST',
+        cs_url,
+        verify=config['cs_ssl_verification'],
+        json=payload_body,
+        headers=header
+    )
+
+    res.close()
 
 def connect_mqtt() -> mqtt:
 
