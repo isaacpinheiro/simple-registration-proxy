@@ -8,6 +8,7 @@ import json
 import re
 
 from config import config
+from src.model.device import Device
 
 def get_http_connection(url, https, verification):
 
@@ -47,6 +48,9 @@ def verify_access_token(token):
 
     return authorized
 
+def register_device(payload):
+    pass
+
 def connect_mqtt() -> mqtt:
 
     def on_connect(client, userdata, flags, rc):
@@ -74,13 +78,33 @@ def subscribe(client: mqtt):
         if re.match(config['topic_regex'], msg.topic) != None:
 
             payload = json.loads(msg.payload.decode())
-            print((msg.topic + ' ' + msg.payload.decode()))
 
             if verify_access_token(payload.get('access_token')) == False:
                 client.publish('access', 'unauthorized')
             else:
-                client.publish('access', 'authorized')
-                # TODO
+
+                dvc = Device()
+                d = dvc.find_by_token(payload.get('access_token'))
+                integration_topic = msg.topic.split('proxy/')[1]
+
+                if d != None and d.get('dev_eui') != payload.get('devEUI'):
+
+                    client.publish('access', 'unauthorized')
+
+                elif d != None and d.get('dev_eui') == payload.get('devEUI'):
+
+                    client.publish(integration_topic, msg.payload.decode())
+
+                else:
+
+                    obj = {
+                        'dev_eui': payload['devEUI'],
+                        'access_token': payload['access_token']
+                    }
+
+                    dvc.insert(obj)
+                    register_device(payload)
+                    client.publish(integration_topic, msg.payload.decode())
 
     client.subscribe(config['mqtt_topic'])
     client.on_message = on_message
